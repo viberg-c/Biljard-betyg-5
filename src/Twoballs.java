@@ -16,7 +16,7 @@ public class Twoballs {
 
     public static void main(String[] args) {
 
-        JFrame frame = new JFrame("No collisions!");          
+        JFrame frame = new JFrame("Perfect Collisions");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         Table table = new Table();           
@@ -58,6 +58,18 @@ class Coord {
 
     Coord norm() {                              // norm: a normalised vector at the same direction
         return new Coord(x / magnitude(), y / magnitude());
+    }
+
+    Coord normBetweenTwoCoords(Coord firstCoord, Coord secondCoord) {
+        double distanceBetweenBalls;
+        double yDiff = firstCoord.y - secondCoord.y;
+        double xDiff = firstCoord.x - secondCoord.x;
+        distanceBetweenBalls = Math.sqrt(yDiff*yDiff + xDiff*xDiff);
+
+        double normedX = xDiff / distanceBetweenBalls;
+        double normedY = yDiff / distanceBetweenBalls;
+
+        return new Coord(normedX, normedY);
     }
 
     void increase(Coord c) {           
@@ -260,15 +272,37 @@ class Ball {
         double xDiff = position.x - theOtherBall.position.x;
 
         distanceBetweenBalls = Math.sqrt(yDiff*yDiff + xDiff*xDiff);
+
         if (distanceBetweenBalls <= RADIUS + theOtherBall.RADIUS){
-            System.out.println("krock!");
             return true;
         }
         return false;
     }
     private void handleBallCollision(Ball theOtherBall){
+        Coord normedCoord = position.normBetweenTwoCoords(position, theOtherBall.position);
+
+        //FÖR FELSÖKNING
+        System.out.println("krock!");
+        System.out.println(normedCoord.x);
+        System.out.println(normedCoord.y);
+
+        //Hanterar buggen där bollarna åker in i varandra
+        this.position.x = theOtherBall.position.x + normedCoord.x * (RADIUS + theOtherBall.RADIUS);
+        this.position.y = theOtherBall.position.y + normedCoord.y * (RADIUS + theOtherBall.RADIUS);
+
+        Coord impulsVector = new Coord(0,0);
+        impulsVector.x = normedCoord.x * (theOtherBall.velocity.x - velocity.x);
+        impulsVector.y = normedCoord.y * (theOtherBall.velocity.y - velocity.y);
+
+        velocity.x = velocity.x + impulsVector.x* normedCoord.x;
+        velocity.y = velocity.y + impulsVector.y* normedCoord.y;
+
+        theOtherBall.velocity.x = theOtherBall.velocity.x - impulsVector.x* normedCoord.x;
+        theOtherBall.velocity.y = theOtherBall.velocity.y - impulsVector.y* normedCoord.y;
 
     }
+
+
     private void stopBall(){
         velocity.x = 0;
         velocity.y = 0;
@@ -310,7 +344,6 @@ class Ball {
          }
          if (isCollidingWithBall(theOtherBall)) {
              handleBallCollision(theOtherBall);
-             stopBall();
          }
     }
     
