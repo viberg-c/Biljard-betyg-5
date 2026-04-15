@@ -267,41 +267,64 @@ class Ball {
         velocity.x = -velocity.x;
     }
     private boolean isCollidingWithBall(Ball theOtherBall) {
-        double distanceBetweenBalls;
-        double yDiff = position.y - theOtherBall.position.y;
-        double xDiff = position.x - theOtherBall.position.x;
+        double distanceBetweenBalls = Coord.distance(position, theOtherBall.position);
+        Coord relativeV = Coord.sub(velocity, theOtherBall.velocity);
+        Coord relD = Coord.sub(position, theOtherBall.position);
+        double scalar = Coord.scal(relativeV, relD);
 
-        distanceBetweenBalls = Math.sqrt(yDiff*yDiff + xDiff*xDiff);
-
-        if (distanceBetweenBalls <= RADIUS + theOtherBall.RADIUS){
+        if (distanceBetweenBalls <= RADIUS + theOtherBall.RADIUS && scalar < 0){
             return true;
         }
         return false;
     }
-    private void handleBallCollision(Ball theOtherBall){
-        Coord normedCoord = position.normBetweenTwoCoords(position, theOtherBall.position);
 
-        //FÖR FELSÖKNING
-        System.out.println("krock!");
-        System.out.println(normedCoord.x);
-        System.out.println(normedCoord.y);
+    private void adjustBalls(Ball theOtherBall) {
+        //Hanterar buggen med att bollarna fastnar, puttar ut bollarna till deras radie + en liten marginal
+
+        Coord normedVector = position.normBetweenTwoCoords(position, theOtherBall.position);
+        double distBetweenBalls = Coord.distance(position, theOtherBall.position);
+
+        double margin = 0.01;
+        double adjustLength = (RADIUS + theOtherBall.RADIUS - distBetweenBalls + margin)/2;
+
+        Coord adjustment = Coord.mul(adjustLength, normedVector);
+
+        position.increase(adjustment);
+        theOtherBall.position.decrease(adjustment);
+    }
+    private void handleBallCollision(Ball theOtherBall){
+        Coord normedVector = position.normBetweenTwoCoords(position, theOtherBall.position);
 
         //Hanterar buggen där bollarna åker in i varandra
-        this.position.x = theOtherBall.position.x + normedCoord.x * (RADIUS + theOtherBall.RADIUS);
-        this.position.y = theOtherBall.position.y + normedCoord.y * (RADIUS + theOtherBall.RADIUS);
+        adjustBalls(theOtherBall);
 
-        Coord impulsVector = new Coord(0,0);
-        impulsVector.x = normedCoord.x * (theOtherBall.velocity.x - velocity.x);
-        impulsVector.y = normedCoord.y * (theOtherBall.velocity.y - velocity.y);
+        //Enligt mekanikformeln
+        double impuls = theOtherBall.velocity.x * normedVector.x + theOtherBall.velocity.y * normedVector.y
+                - (velocity.x * normedVector.x + velocity.y * normedVector.y);
 
-        velocity.x = velocity.x + impulsVector.x* normedCoord.x;
-        velocity.y = velocity.y + impulsVector.y* normedCoord.y;
+        Coord impulsVector = Coord.mul(impuls, normedVector);
 
-        theOtherBall.velocity.x = theOtherBall.velocity.x - impulsVector.x* normedCoord.x;
-        theOtherBall.velocity.y = theOtherBall.velocity.y - impulsVector.y* normedCoord.y;
+        velocity.increase(impulsVector);
+        theOtherBall.velocity.decrease(impulsVector);
 
     }
+    private void printData(Ball theOtherBall) {
+        //FÖR FELSÖKNING
+        Coord normedVector = position.normBetweenTwoCoords(position, theOtherBall.position);
 
+        System.out.println("________________________________");
+        System.out.println("CURRENT BALL");
+        System.out.println("VELOCITY X: " + velocity.x);
+        System.out.println("VELOCITY Y: " + velocity.y);
+        System.out.println("________________________________");
+        System.out.println("OTHER BALL");
+        System.out.println("VELOCITY X: " + theOtherBall.velocity.x);
+        System.out.println("VELOCITY Y: " + theOtherBall.velocity.y);
+        System.out.println("________________________________");
+        System.out.println("krock!");
+        System.out.println(normedVector.x);
+        System.out.println(normedVector.y);
+    }
 
     private void stopBall(){
         velocity.x = 0;
