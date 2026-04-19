@@ -1,6 +1,8 @@
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
@@ -19,9 +21,12 @@ public class Twoballs {
         JFrame frame = new JFrame("Perfect Collisions");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        Table table = new Table();           
+        JButton button = new JButton("Pausa");
+        Table table = new Table();
 
-        frame.add(table);  
+        frame.add(table, BorderLayout.CENTER);
+        frame.add(button, BorderLayout.EAST);
+
         frame.pack();
         frame.setVisible(true);
     }
@@ -72,6 +77,23 @@ class Coord {
         return new Coord(normedX, normedY);
     }
 
+    static Coord giveRandomVector (double upperLimit){
+        double signFlip = -1;
+        double randomX = upperLimit * Math.random();
+        double randomY = upperLimit * Math.random();
+        if (Math.random() < 0.5){ randomX = randomX * signFlip;}
+        if (Math.random() < 0.5){ randomY = randomY * signFlip;}
+
+        return new Coord (randomX, randomY);
+    }
+
+    static Coord giveRandomStartPos(double width, double height, double wallThickness) {
+        double randomX = wallThickness + Math.random() * width/2;
+        double randomY = wallThickness + Math.random() * height;
+
+        return new Coord (randomX, randomY);
+    }
+
     void increase(Coord c) {           
         x += c.x;
         y += c.y;
@@ -97,11 +119,7 @@ class Coord {
     static double distance(Coord a, Coord b) {
         return Coord.sub(a, b).magnitude();
     }
-    
-    static void paintLine(Graphics2D graph2D, Coord a, Coord b){  // paint line between points
-        graph2D.setColor(Color.black);
-        graph2D.drawLine((int)a.x, (int)a.y, (int)b.x, (int)b.y);
-    }
+
 }
 
 /**
@@ -117,14 +135,15 @@ class Coord {
  */
 class Table extends JPanel implements MouseListener, MouseMotionListener, ActionListener {
 
-    private final int   TABLE_WIDTH    = 300;
-    private final int   TABLE_HEIGHT   = 500;
+    private final int   TABLE_WIDTH    = 700;
+    private final int   TABLE_HEIGHT   = 700;
     private final int   WALL_THICKNESS = 20;
     private final Color COLOR          = Color.green;
     private final Color WALL_COLOR     = Color.black;
-    private       Ball  ball1, ball2;
     private final Timer simulationTimer;
-
+    private final int   NUMBER_OF_BALLS = 70;
+    private final int   NUMBER_OF_SICK_BALLS = 5;
+    private final List<Ball>  BALL_ARRAY = new ArrayList<>();
     
     Table() {
         
@@ -136,8 +155,16 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         addMouseMotionListener(this);
 
         simulationTimer = new Timer((int) (1000.0 / Twoballs.UPDATE_FREQUENCY), this);
+        simulationTimer.start();
     }
-
+    public void actionPerformed(ActionEvent e) {          // Timer event
+        for (Ball ball: BALL_ARRAY){
+            ball.move();
+        }
+        checkCollision();
+        removeDeadBalls(BALL_ARRAY);
+        repaint();
+    }
     public int getTABLE_WIDTH () {
         return TABLE_WIDTH;
     }
@@ -148,44 +175,55 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         return WALL_THICKNESS;
     }
     private void createInitialBalls(){
-        final Coord firstInitialPosition = new Coord(100, 100);
-        final Coord secondInitialPosition = new Coord(200, 200);
-        ball1 = new Ball(firstInitialPosition, this);
-        ball2 = new Ball(secondInitialPosition, this);
+
+        for (int i = 0; i < NUMBER_OF_BALLS; i++) {
+            Coord randomStartPos = Coord.giveRandomStartPos(TABLE_WIDTH, TABLE_HEIGHT, WALL_THICKNESS);
+            BALL_ARRAY.add(new Ball(randomStartPos, this));
+        }
+        createInitSickBalls(BALL_ARRAY);
     }
-    
-    public void actionPerformed(ActionEvent e) {          // Timer event
-        ball1.move(ball2);
-        ball2.move(ball1);
-        repaint();
-        if (!ball1.isMoving() && !ball2.isMoving()) {
-            simulationTimer.stop();
+    private void createInitSickBalls (List<Ball> ballArray) {
+        for (int i = 0; i < NUMBER_OF_SICK_BALLS; i++) {
+            ballArray.get(i).isSick = true;
         }
     }
-
-    public void mousePressed(MouseEvent event) {
-        Coord mousePosition = new Coord(event);
-        ball1.setAimPosition(mousePosition);
-        ball2.setAimPosition(mousePosition);
-        repaint();                                          //  To show aiming line
+    public void removeDeadBalls(List<Ball> ballArray) {
+        ballArray.removeIf(ball -> ball.isDead);
     }
+    public void checkCollision() {
+        for (int i = 0; i < BALL_ARRAY.size(); i++){
+            for (int j = i + 1; j < BALL_ARRAY.size(); j++){
+                Ball ballOne = BALL_ARRAY.get(i);
+                Ball ballTwo = BALL_ARRAY.get(j);
 
-    public void mouseReleased(MouseEvent e) {
-        ball1.shoot();
-        ball2.shoot();
-        if (!simulationTimer.isRunning()) {
-            simulationTimer.start();      
+                if (ballOne.isCollidingWithBall(ballTwo)) {
+                    ballOne.handleBallCollision(ballTwo);
+                }
+            }
         }
     }
-
-    public void mouseDragged(MouseEvent event) {
-        Coord mousePosition = new Coord(event);
-        ball1.updateAimPosition(mousePosition);
-        ball2.updateAimPosition(mousePosition);
-        repaint();
+    public int countDead() {
+        int numberOfDead = 0;
+        for (Ball ball: BALL_ARRAY) {
+            if (ball.isDead) {
+                numberOfDead ++;
+            }
+        }
+        return numberOfDead;
     }
-
+    public int countSick() {
+        int numberOfSick = 0;
+        for (Ball ball: BALL_ARRAY) {
+            if (ball.isSick) {
+                numberOfSick ++;
+            }
+        }
+        return numberOfSick;
+    }
     // Obligatory empty listener methods
+    public void mousePressed(MouseEvent event) {}
+    public void mouseReleased(MouseEvent e) {}
+    public void mouseDragged(MouseEvent event) {}
     public void mouseClicked(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
     public void mouseExited(MouseEvent e) {}
@@ -204,8 +242,9 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         g2D.setColor(COLOR);
         g2D.fillRect(WALL_THICKNESS, WALL_THICKNESS, TABLE_WIDTH, TABLE_HEIGHT);
 
-        ball1.paint(g2D);
-        ball2.paint(g2D);
+        for (Ball ball : BALL_ARRAY) {
+            ball.paint(g2D);
+        }
     }
 }  // end class Table
 
@@ -220,25 +259,38 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
 class Ball {
 
     private final Color  COLOR               = Color.white;
+    private final Color  SICK_COLOR          = Color.red;
     private final int    BORDER_THICKNESS    = 2;
-    private final double RADIUS              = 15;
+    private final double RADIUS              = 8;
     private final double DIAMETER            = 2 * RADIUS;
-    private final double FRICTION            = 0.015;                          // its friction constant (normed for 100 updates/second)
+    private final double FRICTION            = 0;                          // its friction constant (normed for 100 updates/second)
     private final double FRICTION_PER_UPDATE =                                 // friction applied each simulation step
                           1.0 - Math.pow(1.0 - FRICTION,                       // don't ask - I no longer remember how I got to this
-                                         100.0 / Twoballs.UPDATE_FREQUENCY);           
+                                         100.0 / Twoballs.UPDATE_FREQUENCY);
+    private final double upperVelocityLimit = 2;
+    private final double INFECT_PROB = 0.10;
+    private final double DIE_PROB = 0.05;
+    private final double HEAL_PROB = 0.1;
+    private final double HEAL_OR_DIE_TIMER = 3;
+
     private Coord position;
     private Coord velocity;
-    private Coord aimPosition;              // if aiming for a shot, ow null
     private Table theTable;
+    private Coord startVelocity;
+    public boolean isSick = false;
+    public boolean isDead = false;
+    public int tickCounterSinceInfected = 0;
+
 
     Ball(Coord initialPosition, Table table) {
+        startVelocity = Coord.giveRandomVector(upperVelocityLimit);
+
         position = initialPosition;
-        velocity = Coord.ZERO;
+        velocity = startVelocity;
         theTable = table;
     }
 
-    private void handleWallHit() {
+    public void handleWallHit() {
         double leftWall   = theTable.getWALL_THICKNESS();
         double rightWall  = theTable.getWALL_THICKNESS() + theTable.getTABLE_WIDTH();
         double topWall    = theTable.getWALL_THICKNESS();
@@ -266,7 +318,7 @@ class Ball {
     private void bounceHorizontal() {
         velocity.x = -velocity.x;
     }
-    private boolean isCollidingWithBall(Ball theOtherBall) {
+    public boolean isCollidingWithBall(Ball theOtherBall) {
         double distanceBetweenBalls = Coord.distance(position, theOtherBall.position);
         Coord relativeV = Coord.sub(velocity, theOtherBall.velocity);
         Coord relD = Coord.sub(position, theOtherBall.position);
@@ -277,7 +329,6 @@ class Ball {
         }
         return false;
     }
-
     private void adjustBalls(Ball theOtherBall) {
         //Hanterar buggen med att bollarna fastnar, puttar ut bollarna till deras radie + en liten marginal
 
@@ -292,11 +343,14 @@ class Ball {
         position.increase(adjustment);
         theOtherBall.position.decrease(adjustment);
     }
-    private void handleBallCollision(Ball theOtherBall){
+    public void handleBallCollision(Ball theOtherBall){
         Coord normedVector = position.normBetweenTwoCoords(position, theOtherBall.position);
 
         //Hanterar buggen där bollarna åker in i varandra
         adjustBalls(theOtherBall);
+
+        //Försök smitta
+        attemptInfect(theOtherBall);
 
         //Enligt mekanikformeln
         double impuls = theOtherBall.velocity.x * normedVector.x + theOtherBall.velocity.y * normedVector.y
@@ -308,65 +362,46 @@ class Ball {
         theOtherBall.velocity.decrease(impulsVector);
 
     }
-    private void printData(Ball theOtherBall) {
-        //FÖR FELSÖKNING
-        Coord normedVector = position.normBetweenTwoCoords(position, theOtherBall.position);
-
-        System.out.println("________________________________");
-        System.out.println("CURRENT BALL");
-        System.out.println("VELOCITY X: " + velocity.x);
-        System.out.println("VELOCITY Y: " + velocity.y);
-        System.out.println("________________________________");
-        System.out.println("OTHER BALL");
-        System.out.println("VELOCITY X: " + theOtherBall.velocity.x);
-        System.out.println("VELOCITY Y: " + theOtherBall.velocity.y);
-        System.out.println("________________________________");
-        System.out.println("krock!");
-        System.out.println(normedVector.x);
-        System.out.println(normedVector.y);
+    public void attemptInfect(Ball theOtherball) {
+        if (this.isSick && !theOtherball.isSick && Math.random() < INFECT_PROB) {
+            theOtherball.isSick = true;
+        }
+        else if (theOtherball.isSick && !this.isSick && Math.random() < INFECT_PROB){
+            this.isSick = true;
+        }
     }
 
-    private void stopBall(){
-        velocity.x = 0;
-        velocity.y = 0;
-    }
-    private boolean isAiming() {
-        return aimPosition != null;
-    }
-    
     boolean isMoving() {    // if moving too slow I am deemed to have stopped
         return velocity.magnitude() > FRICTION_PER_UPDATE;
     }
-    
-    void setAimPosition(Coord grabPosition) {
-        if (Coord.distance(position, grabPosition) <= RADIUS) {
-            aimPosition = grabPosition;
+    private void killOrHeal () {
+        double randomNumber = Math.random();
+        if (randomNumber <= HEAL_PROB){
+            isSick = false;
+            tickCounterSinceInfected = 0;
+            System.out.println("någon blev frisk");
+        }
+        else if (randomNumber <= HEAL_PROB + DIE_PROB){
+            isDead = true;
+            tickCounterSinceInfected = 0;
+            System.out.println("någon dog");
+        }
+        else {
+            tickCounterSinceInfected = 0;
         }
     }
-    
-    void updateAimPosition(Coord newPosition) {
-        if (isAiming()){
-            aimPosition = newPosition;
-        }
-    }
-
-    void shoot() {
-        if (isAiming()) {
-            Coord aimingVector = Coord.sub(position, aimPosition);
-            velocity = Coord.mul(Math.sqrt(10.0 * aimingVector.magnitude() / Twoballs.UPDATE_FREQUENCY),
-                                 aimingVector.norm());  // don't ask - determined by experimentation
-            aimPosition = null;
-        }
-    }
-    
-    void move(Ball theOtherBall) {
+    void move() {
          if (isMoving()) {
              position.increase(velocity);
              velocity.decrease(Coord.mul(FRICTION_PER_UPDATE, velocity.norm()));
              handleWallHit();
          }
-         if (isCollidingWithBall(theOtherBall)) {
-             handleBallCollision(theOtherBall);
+         if (isSick) {
+             tickCounterSinceInfected ++;
+
+             if (tickCounterSinceInfected == HEAL_OR_DIE_TIMER * Twoballs.UPDATE_FREQUENCY) {
+                 killOrHeal();
+             }
          }
     }
     
@@ -380,22 +415,17 @@ class Ball {
                 (int) (position.y - RADIUS + 0.5),
                 (int) DIAMETER,
                 (int) DIAMETER);
-        g2D.setColor(COLOR);
+        if (isSick) {
+            g2D.setColor(SICK_COLOR);
+        }
+        else {
+            g2D.setColor(COLOR);
+        }
         g2D.fillOval(
                 (int) (position.x - RADIUS + 0.5 + BORDER_THICKNESS),
                 (int) (position.y - RADIUS + 0.5 + BORDER_THICKNESS),
                 (int) (DIAMETER - 2 * BORDER_THICKNESS),
                 (int) (DIAMETER - 2 * BORDER_THICKNESS));
-        if (isAiming()) {
-            paintAimingLine(g2D);
-        }
     }
-    
-    private void paintAimingLine(Graphics2D graph2D) {
-            Coord.paintLine(
-                    graph2D,
-                    aimPosition, 
-                    Coord.sub(Coord.mul(2, position), aimPosition)
-                           );
-    } 
+
 } // end  class Ball  
