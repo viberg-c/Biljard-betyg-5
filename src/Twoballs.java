@@ -142,14 +142,16 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     private final Color COLOR          = Color.green;
     private final Color WALL_COLOR     = Color.black;
     private final Timer simulationTimer;
-    private final int   NUMBER_OF_BALLS = 1;
+    private final int   NUMBER_OF_BALLS = 10;
     private final List<Ball>  BALL_ARRAY = new ArrayList<>();
+    private WhiteBall whiteBall;
     
     Table() {
         
         setPreferredSize(new Dimension(TABLE_WIDTH + 2 * WALL_THICKNESS,
                                        TABLE_HEIGHT + 2 * WALL_THICKNESS));
         createInitialBalls();
+        placeBalls();
         
         addMouseListener(this);
         addMouseMotionListener(this);
@@ -174,13 +176,42 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         return WALL_THICKNESS;
     }
     private void createInitialBalls(){
-        final Coord firstInitialPosition = new Coord(100, 100);
         for (int i = 0; i < NUMBER_OF_BALLS; i++) {
-
-            Coord randomStartPos = Coord.giveRandomStartPos(TABLE_WIDTH, TABLE_HEIGHT, WALL_THICKNESS);
-            BALL_ARRAY.add(new Ball(firstInitialPosition, this));
+            BALL_ARRAY.add(new Ball(new Coord(0,0), this));
         }
+        whiteBall = new WhiteBall(new Coord(250, 500), this);
     }
+    private void placeBalls(){
+        //First row
+        double radius = BALL_ARRAY.get(0).getRadius();
+        double row1X = 120;
+        double row2Y = 100;
+        double margin = 3;
+
+        double rad2Y = row2Y + 2*radius-margin;
+        double rad3Y = rad2Y + 2*radius-margin;
+        double rad4Y = rad3Y + 2*radius-margin;
+
+        //Rad 1
+        BALL_ARRAY.getFirst().position = new Coord (row1X, row2Y);
+        BALL_ARRAY.get(1).position = new Coord (row1X + 2*radius, row2Y);
+        BALL_ARRAY.get(2).position = new Coord (row1X + 4*radius, row2Y);
+        BALL_ARRAY.get(3).position = new Coord (row1X + 6*radius, row2Y);
+
+        //Rad 2
+        BALL_ARRAY.get(4).position = new Coord (row1X + radius, rad2Y);
+        BALL_ARRAY.get(5).position = new Coord (row1X + 3*radius, rad2Y);
+        BALL_ARRAY.get(6).position = new Coord (row1X + 5*radius, rad2Y);
+
+        //Rad 3
+        BALL_ARRAY.get(7).position = new Coord (row1X + 2*radius, rad3Y);
+        BALL_ARRAY.get(8).position = new Coord (row1X + 4*radius, rad3Y);
+
+        //Rad 4
+        BALL_ARRAY.get(9).position = new Coord (row1X + 3*radius, rad4Y);
+
+    }
+
     public void checkCollision() {
         for (int i = 0; i < BALL_ARRAY.size(); i++){
             for (int j = i + 1; j < BALL_ARRAY.size(); j++){
@@ -250,7 +281,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
  */
 class Ball {
 
-    private final Color  COLOR               = Color.white;
+    private final Color  COLOR               = Color.DARK_GRAY;
     private final int    BORDER_THICKNESS    = 2;
     private final double RADIUS              = 15;
     private final double DIAMETER            = 2 * RADIUS;
@@ -260,7 +291,7 @@ class Ball {
                                          100.0 / Twoballs.UPDATE_FREQUENCY);
 
 
-    private Coord position;
+    public Coord position;
     private Coord velocity;
     private Table theTable;
     private Coord aimPosition;
@@ -268,7 +299,7 @@ class Ball {
 
     Ball(Coord initialPosition, Table table) {
         position = initialPosition;
-        velocity = Coord.ZERO;
+        velocity = new Coord (0,0);
         theTable = table;
     }
 
@@ -331,7 +362,6 @@ class Ball {
         //Hanterar buggen där bollarna åker in i varandra
         adjustBalls(theOtherBall);
 
-
         //Enligt mekanikformeln
         double impuls = theOtherBall.velocity.x * normedVector.x + theOtherBall.velocity.y * normedVector.y
                 - (velocity.x * normedVector.x + velocity.y * normedVector.y);
@@ -342,7 +372,7 @@ class Ball {
         theOtherBall.velocity.decrease(impulsVector);
 
     }
-
+    public double getRadius(){return RADIUS;}
     boolean isMoving() {    // if moving too slow I am deemed to have stopped
         return velocity.magnitude() > FRICTION_PER_UPDATE;
     }
@@ -405,4 +435,12 @@ class Ball {
         );
     }
 
-} // end  class Ball  
+}
+class WhiteBall extends Ball {
+    private final Color  COLOR               = Color.white;
+
+    WhiteBall(Coord initialPosition, Table table) {
+        super(initialPosition, table);
+    }
+
+}
