@@ -268,6 +268,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball : BALL_ARRAY) {
             ball.paint(g2D);
         }
+        whiteBall.paint(g2D);
     }
 }  // end class Table
 
@@ -440,7 +441,9 @@ class WhiteBall extends Ball {
     private final Color  COLOR               = Color.white;
 
     WhiteBall(Coord initialPosition, Table table) {
+
         super(initialPosition, table);
+
     }
 
 }
