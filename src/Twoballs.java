@@ -144,7 +144,9 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     private final Timer simulationTimer;
     private final int   NUMBER_OF_BALLS = 10;
     private final List<Ball>  BALL_ARRAY = new ArrayList<>();
+    private final List<Hole> HOLE_ARRAY = new ArrayList<>();
     private WhiteBall whiteBall;
+    private boolean whiteInHole = false;
     
     Table() {
         
@@ -152,6 +154,8 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
                                        TABLE_HEIGHT + 2 * WALL_THICKNESS));
         createInitialBalls();
         placeBalls();
+
+        createHoles();
         
         addMouseListener(this);
         addMouseMotionListener(this);
@@ -163,7 +167,9 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball: BALL_ARRAY){
             ball.move();
         }
-        checkCollision();
+        checkBallCollisions();
+        checkHoleCollisions();
+        removeBallsOutOfPlay();
         repaint();
     }
     public int getTABLE_WIDTH () {
@@ -176,15 +182,18 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         return WALL_THICKNESS;
     }
     private void createInitialBalls(){
+        int whiteBallX = ((TABLE_WIDTH + WALL_THICKNESS*2)/2);
+        int whiteBallY = 400;
         for (int i = 0; i < NUMBER_OF_BALLS; i++) {
             BALL_ARRAY.add(new Ball(new Coord(0,0), this));
         }
-        whiteBall = new WhiteBall(new Coord(250, 500), this);
+        whiteBall = new WhiteBall(new Coord(whiteBallX, whiteBallY), this);
+        BALL_ARRAY.add(whiteBall);
     }
     private void placeBalls(){
         //First row
         double radius = BALL_ARRAY.get(0).getRadius();
-        double row1X = 120;
+        double row1X = 128;
         double row2Y = 100;
         double margin = 3;
 
@@ -211,8 +220,17 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         BALL_ARRAY.get(9).position = new Coord (row1X + 3*radius, rad4Y);
 
     }
+    private void createHoles () {
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, 2*WALL_THICKNESS), this));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, 2*WALL_THICKNESS), this));
 
-    public void checkCollision() {
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT*0.5), this));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT*0.5), this));
+
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT), this));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT), this));
+    }
+    public void checkBallCollisions() {
         for (int i = 0; i < BALL_ARRAY.size(); i++){
             for (int j = i + 1; j < BALL_ARRAY.size(); j++){
                 Ball ballOne = BALL_ARRAY.get(i);
@@ -224,11 +242,36 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
             }
         }
     }
+    public void setWhiteballHoleStatus(boolean status) {
+        whiteInHole = status;
+    }
+    public void checkHoleCollisions() {
+        for (Ball ball : BALL_ARRAY){
+            for (Hole hole: HOLE_ARRAY){
+                if (Coord.distance(ball.position, hole.position) < Math.abs(ball.getRadius()-hole.getRadius())){
+                    ball.handleHoleEvent(ball);
+
+                    if (ball instanceof WhiteBall) {
+                        whiteInHole = true;
+                        ball.velocity = new Coord (0,0);
+                    }
+                }
+            }
+        }
+    }
+    public void removeBallsOutOfPlay() {
+        BALL_ARRAY.removeIf(ball -> !ball.isInPlay);
+    }
+    public void checkAllowedDropSpot() {
+
+    }
     // Obligatory empty listener methods
     public void mousePressed(MouseEvent event) {
         Coord mousePosition = new Coord(event);
-        for (Ball ball: BALL_ARRAY) {
-            ball.setAimPosition(mousePosition);
+        if (Coord.distance(whiteBall.position, mousePosition) < whiteBall.getRadius()){
+            if (!whiteBall.isMoving()){
+                whiteBall.setAimPosition(mousePosition);
+            }
         }
         repaint();
     }
@@ -245,12 +288,20 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball: BALL_ARRAY) {
             ball.updateAimPosition(mousePosition);
         }
+        if (whiteInHole) {
+            whiteBall.position = mousePosition;
+        }
         repaint();
+    }
+    public void mouseMoved(MouseEvent event) {
+        Coord mousePosition = new Coord(event);
+        if (whiteInHole) {
+            whiteBall.position = mousePosition;
+        }
     }
     public void mouseClicked(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
     public void mouseExited(MouseEvent e) {}
-    public void mouseMoved(MouseEvent e) {}
     
     @Override
     public void paintComponent(Graphics graphics) {
@@ -266,9 +317,14 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         g2D.fillRect(WALL_THICKNESS, WALL_THICKNESS, TABLE_WIDTH, TABLE_HEIGHT);
 
         for (Ball ball : BALL_ARRAY) {
-            ball.paint(g2D);
+            if (ball.isInPlay) {
+                ball.paint(g2D);
+            }
         }
-        whiteBall.paint(g2D);
+
+        for (Hole hole : HOLE_ARRAY) {
+            hole.paint(g2D);
+        }
     }
 }  // end class Table
 
@@ -282,7 +338,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
  */
 class Ball {
 
-    private final Color  COLOR               = Color.DARK_GRAY;
+    protected Color  COLOR               = Color.DARK_GRAY;
     private final int    BORDER_THICKNESS    = 2;
     private final double RADIUS              = 15;
     private final double DIAMETER            = 2 * RADIUS;
@@ -293,9 +349,10 @@ class Ball {
 
 
     public Coord position;
-    private Coord velocity;
-    private Table theTable;
+    protected Coord velocity;
+    protected Table theTable;
     private Coord aimPosition;
+    public boolean isInPlay = true;
 
 
     Ball(Coord initialPosition, Table table) {
@@ -303,7 +360,9 @@ class Ball {
         velocity = new Coord (0,0);
         theTable = table;
     }
-
+    public void handleHoleEvent(Ball ball) {
+        ball.isInPlay = false;
+    }
     public void handleWallHit() {
         double leftWall   = theTable.getWALL_THICKNESS();
         double rightWall  = theTable.getWALL_THICKNESS() + theTable.getTABLE_WIDTH();
@@ -438,12 +497,46 @@ class Ball {
 
 }
 class WhiteBall extends Ball {
-    private final Color  COLOR               = Color.white;
+    private final Color  WHITE_COLOR               = Color.white;
 
     WhiteBall(Coord initialPosition, Table table) {
-
         super(initialPosition, table);
-
+        this.COLOR = WHITE_COLOR;
     }
 
+    @Override
+    public void handleHoleEvent(Ball ball){
+        this.velocity = new Coord(0,0);
+        theTable.setWhiteballHoleStatus(true);
+    }
+
+}
+
+class Hole {
+    public Coord position;
+    private Table theTable;
+    protected Color  COLOR               = Color.PINK;
+    private final int    BORDER_THICKNESS    = 1;
+    private final double RADIUS              = 20;
+    private final double DIAMETER            = 2 * RADIUS;
+
+    Hole(Coord initialPosition, Table table) {
+        position = initialPosition;
+        theTable = table;
+    }
+    public double getRadius(){return RADIUS;}
+    void paint(Graphics2D g2D) {
+        g2D.setColor(Color.black);
+        g2D.fillOval(
+                (int) (position.x - RADIUS + 0.5),
+                (int) (position.y - RADIUS + 0.5),
+                (int) DIAMETER,
+                (int) DIAMETER);
+        g2D.setColor(COLOR);
+        g2D.fillOval(
+                (int) (position.x - RADIUS + 0.5 + BORDER_THICKNESS),
+                (int) (position.y - RADIUS + 0.5 + BORDER_THICKNESS),
+                (int) (DIAMETER - 2 * BORDER_THICKNESS),
+                (int) (DIAMETER - 2 * BORDER_THICKNESS));
+    }
 }
