@@ -179,18 +179,25 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         simulationTimer.start();
     }
     public void actionPerformed(ActionEvent e) {          // Timer event
-        for (Ball ball: BALL_ARRAY){
-            ball.move();
-        }
+        moveAllBalls();
+
         if (!whiteInHole){
             checkBallCollisions();
             checkHoleCollisions();
             removeBallsOutOfPlay();
         }
 
+        doEndOfTurnControl();
+        repaint();
+    }
+    public void moveAllBalls() {
+        for (Ball ball: BALL_ARRAY){
+            ball.move();
+        }
+    }
+    public void doEndOfTurnControl () {
         if (isShooting && !isAnyBallMoving()){
             isShooting = false;
-
             if (whiteInHole || !ABallWasPocketedThisTurn) {
                 isPlayer1Turn = !isPlayer1Turn;
             }
@@ -198,7 +205,6 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
             ABallWasPocketedThisTurn = false;
             updateScore();
         }
-        repaint();
     }
 
     public  void restartGame() {
@@ -225,7 +231,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         player2Label.setText("Player 2 score: " + player2Score);
 
         Color activeColor = new Color(0, 0, 0, 255);    // Helt svart
-        Color inactiveColor = new Color(0, 0, 0, 100);  // Nedtonad svart (genomskinlig)
+        Color inactiveColor = new Color(0, 0, 0, 80);  // Nedtonad svart (genomskinlig)
 
         if (isPlayer1Turn) {
             player1Label.setForeground(activeColor);
@@ -292,14 +298,14 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
 
     }
     private void createHoles () {
-        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, 2*WALL_THICKNESS), this));
-        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, 2*WALL_THICKNESS), this));
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, 2*WALL_THICKNESS)));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, 2*WALL_THICKNESS)));
 
-        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT*0.5), this));
-        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT*0.5), this));
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT*0.5)));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT*0.5)));
 
-        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT), this));
-        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT), this));
+        HOLE_ARRAY.add(new Hole(new Coord(2*WALL_THICKNESS, TABLE_HEIGHT)));
+        HOLE_ARRAY.add(new Hole(new Coord(TABLE_WIDTH, TABLE_HEIGHT)));
     }
     public void checkBallCollisions() {
         for (int i = 0; i < BALL_ARRAY.size(); i++){
@@ -319,7 +325,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     public void checkHoleCollisions() {
         for (Ball ball : BALL_ARRAY){
             for (Hole hole: HOLE_ARRAY){
-                if (Coord.distance(ball.position, hole.position) < Math.abs(ball.getRadius()-hole.getRadius())){
+                if (hole.isBallInHole(ball)){
                     ball.handleHoleEvent(ball);
 
                     if (ball instanceof WhiteBall) {
@@ -334,7 +340,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     public void removeBallsOutOfPlay() {
         BALL_ARRAY.removeIf(ball -> !ball.isInPlay);
     }
-    public boolean validBallPos(Coord mousePosition) {
+    public boolean checkValidBallPos(Coord mousePosition) {
         for (Ball ball: BALL_ARRAY) {
             if (ball != whiteBall && ball.isInPlay) {
                 if (Coord.distance(mousePosition, ball.position) < ball.getRadius() + whiteBall.getRadius()){
@@ -347,13 +353,31 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
                 return false;
             }
         }
+        if (!isOnTable(mousePosition)){
+            return false;
+        }
         return true;
+    }
+    public boolean isOnTable(Coord mousePosition) {
+        double leftWall   = WALL_THICKNESS;
+        double rightWall  = WALL_THICKNESS + TABLE_WIDTH;
+        double topWall    = WALL_THICKNESS;
+        double bottomWall = TABLE_HEIGHT + WALL_THICKNESS;
+        double radius = whiteBall.getRadius();
+
+        if (mousePosition.x - radius >= leftWall &&
+                mousePosition.x + radius <= rightWall &&
+                mousePosition.y - radius> topWall &&
+                mousePosition.y + radius <= bottomWall){
+            return true;
+        }
+        return false;
     }
     // Obligatory empty listener methods
     public void mousePressed(MouseEvent event) {
         Coord mousePosition = new Coord(event);
         if (whiteInHole) {
-            if (validBallPos(mousePosition)){
+            if (checkValidBallPos(mousePosition)){
                 whiteBall.position = mousePosition;
                 whiteInHole = false;
                 placedWhiteBallThisTurn = true;
@@ -379,11 +403,13 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
             return;
         }
 
-        whiteBall.shoot();
-        isShooting = true;
+        if (whiteBall.isAiming()) {
+            whiteBall.shoot();
+            isShooting = true;
 
-        if (!simulationTimer.isRunning()) {
-            simulationTimer.start();
+            if (!simulationTimer.isRunning()) {
+                simulationTimer.start();
+            }
         }
     }
     public void mouseDragged(MouseEvent event) {
@@ -573,7 +599,7 @@ class Ball {
              handleWallHit();
          }
     }
-    private boolean isAiming() {
+    public boolean isAiming() {
         return aimPosition != null;
     }
     
@@ -625,15 +651,20 @@ class WhiteBall extends Ball {
 
 class Hole {
     public Coord position;
-    private Table theTable;
     protected Color  COLOR               = Color.PINK;
     private final int    BORDER_THICKNESS    = 1;
     private final double RADIUS              = 20;
     private final double DIAMETER            = 2 * RADIUS;
 
-    Hole(Coord initialPosition, Table table) {
+    Hole(Coord initialPosition) {
         position = initialPosition;
-        theTable = table;
+    }
+
+    public boolean isBallInHole(Ball ball) {
+        if(Coord.distance(ball.position, this.position) < Math.abs(ball.getRadius()-this.getRadius())){
+            return true;
+        }
+        return false;
     }
     public double getRadius(){return RADIUS;}
     void paint(Graphics2D g2D) {
