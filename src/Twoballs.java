@@ -21,9 +21,30 @@ public class Twoballs {
         JFrame frame = new JFrame("Perfect Collisions");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        Table table = new Table();
+        JPanel controlPanel = new JPanel();
+        controlPanel.setLayout(new GridLayout(1, 2));
 
+        JLabel player1 = new JLabel("Player 1 score: ");
+        player1.setFont(new Font("Arial", Font.BOLD, 18));
+        JLabel player2 = new JLabel("Player 2 score: ");
+        player2.setFont(new Font("Arial", Font.BOLD, 18));
+
+        controlPanel.add(player1);
+        controlPanel.add(player2);
+
+        Table table = new Table(player1, player2);
+
+        JButton resetButton = new JButton("Restart");
+        resetButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                table.restartGame();
+            }
+        });
+
+        frame.add(resetButton, BorderLayout.SOUTH);
         frame.add(table, BorderLayout.CENTER);
+        frame.add(controlPanel, BorderLayout.NORTH);
         frame.pack();
         frame.setVisible(true);
     }
@@ -74,22 +95,6 @@ class Coord {
         return new Coord(normedX, normedY);
     }
 
-    static Coord giveRandomVector (double upperLimit){
-        double signFlip = -1;
-        double randomX = upperLimit * Math.random();
-        double randomY = upperLimit * Math.random();
-        if (Math.random() < 0.5){ randomX = randomX * signFlip;}
-        if (Math.random() < 0.5){ randomY = randomY * signFlip;}
-
-        return new Coord (randomX, randomY);
-    }
-
-    static Coord giveRandomStartPos(double width, double height, double wallThickness) {
-        double randomX = wallThickness + Math.random() * width/2;
-        double randomY = wallThickness + Math.random() * height;
-
-        return new Coord (randomX, randomY);
-    }
 
     void increase(Coord c) {           
         x += c.x;
@@ -147,9 +152,19 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     private final List<Hole> HOLE_ARRAY = new ArrayList<>();
     private WhiteBall whiteBall;
     private boolean whiteInHole = false;
+    protected boolean isPlayer1Turn = true;
+    private JLabel player1Label, player2Label;
+    protected int player1Score = 0;
+    protected int player2Score = 0;
+    private boolean isShooting = false;
+    protected boolean ABallWasPocketedThisTurn = false;
+    protected boolean placedWhiteBallThisTurn = false;
     
-    Table() {
-        
+    Table(JLabel player1, JLabel player2) {
+        this.player1Label = player1;
+        this.player2Label = player2;
+        updateScore();
+
         setPreferredSize(new Dimension(TABLE_WIDTH + 2 * WALL_THICKNESS,
                                        TABLE_HEIGHT + 2 * WALL_THICKNESS));
         createInitialBalls();
@@ -167,10 +182,58 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball: BALL_ARRAY){
             ball.move();
         }
-        checkBallCollisions();
-        checkHoleCollisions();
-        removeBallsOutOfPlay();
+        if (!whiteInHole){
+            checkBallCollisions();
+            checkHoleCollisions();
+            removeBallsOutOfPlay();
+        }
+
+        if (isShooting && !isAnyBallMoving()){
+            isShooting = false;
+
+            if (whiteInHole || !ABallWasPocketedThisTurn) {
+                isPlayer1Turn = !isPlayer1Turn;
+            }
+
+            ABallWasPocketedThisTurn = false;
+            updateScore();
+        }
         repaint();
+    }
+
+    public  void restartGame() {
+        simulationTimer.stop();
+
+        player1Score = 0;
+        player2Score = 0;
+        isPlayer1Turn = true;
+        whiteInHole = false;
+        isShooting = false;
+        ABallWasPocketedThisTurn = false;
+        BALL_ARRAY.clear();
+
+        createInitialBalls();
+        placeBalls();
+
+        updateScore();
+        repaint();
+        simulationTimer.start();
+
+    }
+    public void updateScore() {
+        player1Label.setText("Player 1 score: " + player1Score);
+        player2Label.setText("Player 2 score: " + player2Score);
+
+        Color activeColor = new Color(0, 0, 0, 255);    // Helt svart
+        Color inactiveColor = new Color(0, 0, 0, 100);  // Nedtonad svart (genomskinlig)
+
+        if (isPlayer1Turn) {
+            player1Label.setForeground(activeColor);
+            player2Label.setForeground(inactiveColor);
+        } else {
+            player1Label.setForeground(inactiveColor);
+            player2Label.setForeground(activeColor);
+        }
     }
     public int getTABLE_WIDTH () {
         return TABLE_WIDTH;
@@ -180,6 +243,14 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
     }
     public int getWALL_THICKNESS() {
         return WALL_THICKNESS;
+    }
+    private boolean isAnyBallMoving() {
+        for (Ball ball: BALL_ARRAY) {
+            if (ball.isMoving()){
+                return true;
+            }
+        }
+        return false;
     }
     private void createInitialBalls(){
         int whiteBallX = ((TABLE_WIDTH + WALL_THICKNESS*2)/2);
@@ -258,27 +329,59 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
                 }
             }
         }
+        updateScore();
     }
     public void removeBallsOutOfPlay() {
         BALL_ARRAY.removeIf(ball -> !ball.isInPlay);
     }
-    public void checkAllowedDropSpot() {
-
+    public boolean validBallPos(Coord mousePosition) {
+        for (Ball ball: BALL_ARRAY) {
+            if (ball != whiteBall && ball.isInPlay) {
+                if (Coord.distance(mousePosition, ball.position) < ball.getRadius() + whiteBall.getRadius()){
+                    return false;
+                }
+            }
+        }
+        for (Hole hole: HOLE_ARRAY){
+            if (Coord.distance(mousePosition, hole.position) < hole.getRadius() + whiteBall.getRadius()){
+                return false;
+            }
+        }
+        return true;
     }
     // Obligatory empty listener methods
     public void mousePressed(MouseEvent event) {
         Coord mousePosition = new Coord(event);
+        if (whiteInHole) {
+            if (validBallPos(mousePosition)){
+                whiteBall.position = mousePosition;
+                whiteInHole = false;
+                placedWhiteBallThisTurn = true;
+                repaint();
+            }
+            return;
+        }
+
         if (Coord.distance(whiteBall.position, mousePosition) < whiteBall.getRadius()){
-            if (!whiteBall.isMoving()){
+            if (!isAnyBallMoving()){
                 whiteBall.setAimPosition(mousePosition);
             }
         }
         repaint();
     }
     public void mouseReleased(MouseEvent e) {
-        for (Ball ball: BALL_ARRAY) {
-            ball.shoot();
+        if (whiteInHole){
+            return;
         }
+
+        if (placedWhiteBallThisTurn) {
+            placedWhiteBallThisTurn = false;
+            return;
+        }
+
+        whiteBall.shoot();
+        isShooting = true;
+
         if (!simulationTimer.isRunning()) {
             simulationTimer.start();
         }
@@ -316,14 +419,13 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         g2D.setColor(COLOR);
         g2D.fillRect(WALL_THICKNESS, WALL_THICKNESS, TABLE_WIDTH, TABLE_HEIGHT);
 
+        for (Hole hole : HOLE_ARRAY) {
+            hole.paint(g2D);
+        }
         for (Ball ball : BALL_ARRAY) {
             if (ball.isInPlay) {
                 ball.paint(g2D);
             }
-        }
-
-        for (Hole hole : HOLE_ARRAY) {
-            hole.paint(g2D);
         }
     }
 }  // end class Table
@@ -361,7 +463,15 @@ class Ball {
         theTable = table;
     }
     public void handleHoleEvent(Ball ball) {
+        if (theTable.isPlayer1Turn) {
+            theTable.player1Score ++;
+        }
+        else {
+            theTable.player2Score ++;
+        }
         ball.isInPlay = false;
+        theTable.ABallWasPocketedThisTurn = true;
+        theTable.updateScore();
     }
     public void handleWallHit() {
         double leftWall   = theTable.getWALL_THICKNESS();
@@ -508,6 +618,7 @@ class WhiteBall extends Ball {
     public void handleHoleEvent(Ball ball){
         this.velocity = new Coord(0,0);
         theTable.setWhiteballHoleStatus(true);
+        theTable.updateScore();
     }
 
 }
