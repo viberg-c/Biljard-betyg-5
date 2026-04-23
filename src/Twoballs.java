@@ -169,7 +169,6 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
                                        TABLE_HEIGHT + 2 * WALL_THICKNESS));
         createInitialBalls();
         placeBalls();
-
         createHoles();
         
         addMouseListener(this);
@@ -207,7 +206,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         }
     }
 
-    public  void restartGame() {
+    public void restartGame() {
         simulationTimer.stop();
 
         player1Score = 0;
@@ -417,9 +416,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball: BALL_ARRAY) {
             ball.updateAimPosition(mousePosition);
         }
-        if (whiteInHole) {
-            whiteBall.position = mousePosition;
-        }
+
         repaint();
     }
     public void mouseMoved(MouseEvent event) {
