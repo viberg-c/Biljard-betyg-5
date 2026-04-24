@@ -325,7 +325,7 @@ class Table extends JPanel implements MouseListener, MouseMotionListener, Action
         for (Ball ball : BALL_ARRAY){
             for (Hole hole: HOLE_ARRAY){
                 if (hole.isBallInHole(ball)){
-                    ball.handleHoleEvent(ball);
+                    ball.handleHoleEvent();
 
                     if (ball instanceof WhiteBall) {
                         whiteInHole = true;
@@ -485,14 +485,14 @@ class Ball {
         velocity = new Coord (0,0);
         theTable = table;
     }
-    public void handleHoleEvent(Ball ball) {
+    public void handleHoleEvent() {
         if (theTable.isPlayer1Turn) {
             theTable.player1Score ++;
         }
         else {
             theTable.player2Score ++;
         }
-        ball.isInPlay = false;
+        isInPlay = false;
         theTable.ABallWasPocketedThisTurn = true;
         theTable.updateScore();
     }
@@ -638,7 +638,7 @@ class WhiteBall extends Ball {
     }
 
     @Override
-    public void handleHoleEvent(Ball ball){
+    public void handleHoleEvent(){
         this.velocity = new Coord(0,0);
         theTable.setWhiteballHoleStatus(true);
         theTable.updateScore();
